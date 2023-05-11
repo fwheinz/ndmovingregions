@@ -1,0 +1,203 @@
+import numpy as np
+import sys
+import math
+import time
+from vpython import *
+from scipy.spatial import ConvexHull
+
+def p_slice (p1, p2, t):
+  if (p1[3] >= t and p2[3] <= t):
+    tmp = p1
+    p1 = p2
+    p2 = tmp
+  if (p1[3] > t or p2[3] < t or p1[3] == p2[3]):
+    return None
+  st = p1[3]
+  et = p2[3]
+  dt = et - st
+  frac = (t - st) / dt
+  p = [0, 0, 0]
+  for i in range(0, 3):
+    p[i] = p1[i] + (p2[i] - p1[i])*frac
+  return p
+
+def t_slice (vertex, points, t):
+  ret = []
+  for i1 in range(0, 4):
+    for i2 in range(i1+1, 4):
+      p = p_slice(points[vertex[i1]], points[vertex[i2]], t)
+      if (p != None):
+        ret.append(p)
+  return ret
+
+def getindex (l, e):
+  for i in range(0, len(l)):
+    if (l[i] == e):
+      return i
+  l.append(e)
+  return len(l)-1
+
+def sub(p1, p2):
+  return [p2[0]-p1[0], p2[1]-p1[1], p2[2]-p1[2]]
+
+def norm(p):
+  l = math.sqrt(p[0]*p[0]+p[1]*p[1]+p[2]*p[2])
+  return [p[0]/l, p[1]/l, p[2]/l]
+
+def atinstant(hull, t, simp):
+  i = 0
+  k = 0
+  points = []
+  facets = []
+  for s in hull.simplices:
+    k = k + 1
+    if (simp >= 0 and k-1 != simp): continue
+    ps = t_slice(s, hull.points, t)
+    if (len(ps) == 0):
+      continue
+    facet = []
+    pt = []
+    for p in ps:
+      facet.append(getindex(points, p))
+      pt.append(p)
+    if (simp >= 0):
+      print("Rendering simplex "+str(simp))
+      print("["+",".join(["["+",".join([str(p) for p in hull.points[n]])+"]" for n in s])+"]")
+      print("")
+      for p in ps:
+        print(p, " ", end='')
+      print("")
+      if (len(pt) == 4):
+        print("Vec1:", norm(sub(pt[0],pt[1])), norm(sub(pt[2],pt[3])))
+        print("Vec2:", norm(sub(pt[0],pt[2])), norm(sub(pt[1],pt[3])))
+      print("\n\n")
+    facets.append(facet)
+    i = i + 1
+  return [points, facets]
+   
+def printopenscad(poly):
+  facets = poly[1]
+  points = poly[0]
+  for f in facets:
+    print("plane([", end='')
+    first = True
+    for p in f:
+      if first:
+        first = False
+      else:
+        print(",",end='')
+      print("[",points[p][0],",",points[p][1],",",points[p][2],"]",end='')
+    print("]);");
+
+
+def interpolate(poly1, t1, poly2, t2):
+  points = []
+  for p in poly1:
+    p.append(t1)
+    points.append(p)
+  for p in poly2:
+    p.append(t2)
+    points.append(p)
+  ret = ConvexHull(points, qhull_options='Qt')
+  ret.ti = t1
+  ret.tf = t2
+
+  return ret
+
+objs = []
+insettime = False
+insetsimplex = False
+ti = 0
+simplex = -1
+
+def settime(t):
+  global insettime
+  global ti
+  if (insettime): return
+  insettime = True
+  ti = t.value
+  res = atinstant(mr3d, ti, simplex)
+  showvpython(res, True)
+  insettime = False
+
+def setsimplex(s):
+  global insetsimplex
+  global simplex
+  global ti
+  if (insetsimplex): return
+  insetsimplex=True
+  simplex = s.value
+  res = atinstant(mr3d, ti, simplex)
+  showvpython(res)
+  insetsimplex=False
+
+def vert(pos):
+   v = vertex(pos=pos)
+   return v
+
+def showvpython(poly, clear = True):
+  global objs
+
+  if clear:
+    for i in objs:
+      i.visible = False
+      del i
+    objs = []
+
+  facets = poly[1]
+  points = poly[0]
+  col = 0
+  for f in facets:
+    vs = []
+    for pt in f:
+      p = points[pt]
+      vx = vert(pos=vec(p[0],p[1],p[2]))
+      if col%4 == 10: vx.color = color.red
+      elif col%4 == 11: vx.color = color.green
+      elif col%4 == 12: vx.color = color.blue
+      else: vx.color = color.yellow
+      vs.append(vx)
+    col = col + 1
+    if len(vs) == 3:
+      t = triangle(v0=vs[0], v1=vs[1], v2=vs[2])
+      n = (vs[1].pos-vs[0].pos).cross(vs[2].pos-vs[1].pos).norm()
+      if n.z < 0: n = -n
+      vs[0].normal = vs[1].normal = vs[2].normal = n
+      objs.append(t)
+    elif len(vs) == 4:
+      t = quad(v0=vs[0], v1=vs[1], v2=vs[3], v3=vs[2])
+      n = (vs[1].pos-vs[0].pos).cross(vs[2].pos-vs[1].pos).norm()
+      if n.z < 0: n = -n
+      vs[0].normal = vs[1].normal = vs[2].normal = vs[3].normal = n
+      objs.append(t)
+#      t = triangle(v0=vs[0], v1=vs[1], v2=vs[3])
+#      t2 = triangle(v0=vs[0], v1=vs[3], v2=vs[2])
+#      n = (vs[1].pos-vs[0].pos).cross(vs[2].pos-vs[1].pos).norm()
+#      if n.z < 0: n = -n
+#      vs[0].normal = vs[1].normal = vs[2].normal = vs[3].normal = n
+#      objs.append(t)
+#      objs.append(t2)
+    else:
+      print("Error: invalid len",len(vs))
+  return objs
+
+def showmodel (hull):
+  i = 0
+  points = []
+  facets = []
+  for s in hull.simplices:
+    for n in s:
+      print(hull.points[n], end='')
+    print("\n")
+
+def mr3dviewer(poly1, t1, poly2, t2):
+   global mr3d
+   canv = canvas(width=1200, height=800)
+   mr3d = interpolate(poly1, t1, poly2, t2)
+   showmodel(mr3d)
+   t = mr3d.ti/2+mr3d.tf/2
+   slider(min=mr3d.ti, max=mr3d.tf, step=(mr3d.tf-mr3d.ti)/100, value=t, length=220, bind=settime, right=15)
+   slider(min=-1, max=len(mr3d.simplices)-1, value=-1, length=220, bind=setsimplex, right=15, step=1)
+   settime(type('',(object,),{"value": t})())
+   time.sleep(1000000);
+
