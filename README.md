@@ -33,6 +33,6 @@ Example 2: Interpolation between two random convex polyhedra
 
 Start with: ./rand.sh
 
-Author: Florian Heinz <florian.heinz@oth.regensburg.de>
+Author: Florian Heinz <florian.heinz@oth-regensburg.de>
 
 Regensburg, 2023-05-11
