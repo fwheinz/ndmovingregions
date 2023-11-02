@@ -80,6 +80,7 @@ def showvpython(poly):
   global canv
   for i in canv.objects: i.visible = False; del i
 
+
   # Create triangles and quads from points and facets
   points, facets = poly[0], poly[1]
   for f in facets:
@@ -103,6 +104,7 @@ def showvpython(poly):
 # t: The slider value
 in_settime = False
 def settime(t):
+  print("Called settime")
   global in_settime
   if (not in_settime): # We do not want this to be executed twice in parallel
     in_settime = True
